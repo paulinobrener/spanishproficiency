@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spanish Video Finder</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="container">
+    <h1>Spanish Video Finder</h1>
+    <p>Filter and search videos by country, speaker, and level.</p>
+  </header>
+
+  <section class="container filters">
+    <div class="field">
+      <label for="search">Search</label>
+      <input id="search" type="text" placeholder="Type to search Task, Country, Speaker" />
+    </div>
+
+    <div class="field">
+      <label for="country">Country</label>
+      <select id="country">
+        <option value="">All</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="level">Level</label>
+      <select id="level">
+        <option value="">All</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="speaker">Speaker</label>
+      <select id="speaker">
+        <option value="">All</option>
+      </select>
+    </div>
+
+    <div class="buttons">
+      <button id="clear">Clear filters</button>
+      <button id="share">Share this view</button>
+    </div>
+  </section>
+
+  <main class="container">
+    <div id="count" class="count"></div>
+    <div id="results" class="grid"></div>
+  </main>
+
+  <template id="card-template">
+    <article class="card">
+      <div class="card-body">
+        <h3 class="title"></h3>
+        <p class="meta"></p>
+        <a class="link" href="#" target="_blank" rel="noopener">Watch</a>
+      </div>
+    </article>
+  </template>
+
+  <footer class="container footer">
+    <p>Data source: spanish_proficiency_exercises.json</p>
+  </footer>
+
+  <script>
+    window.APP_CONFIG = {
+      dataUrl: 'spanish_proficiency_exercises.json'
+    };
+  </script>
+  <script src="script.js"></script>
+</body>
+</html>
