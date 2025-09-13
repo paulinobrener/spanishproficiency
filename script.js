@@ -1,27 +1,31 @@
 
 async function loadData() {
   const url = window.APP_CONFIG.dataUrl;
-  const resp = await fetch(url);
+  const resp = await fetch(url, { cache: "no-store" });
   const data = await resp.json();
   return data;
 }
 
+function clean(s) {
+  return String(s == null ? "" : s).trim();
+}
+
 function uniqueSorted(list, key) {
-  const set = new Set(list.map(x => (x[key] || '').trim()).filter(Boolean));
+  const set = new Set(list.map(x => clean(x[key])).filter(Boolean));
   return Array.from(set).sort((a,b) => a.localeCompare(b));
 }
 
 function applyFilters(data, filters) {
-  const query = (filters.query || '').toLowerCase().trim();
-  const byCountry = (filters.country || '').toLowerCase();
-  const byLevel = (filters.level || '').toLowerCase();
-  const bySpeaker = (filters.speaker || '').toLowerCase();
+  const query = clean(filters.query).toLowerCase();
+  const byCountry = clean(filters.country).toLowerCase();
+  const byLevel = clean(filters.level).toLowerCase();
+  const bySpeaker = clean(filters.speaker).toLowerCase();
 
   return data.filter(row => {
-    const country = String(row['Country'] || '').toLowerCase();
-    const level = String(row['Level'] || '').toLowerCase();
-    const speaker = String(row['Speaker'] || '').toLowerCase();
-    const task = String(row['Task'] || '').toLowerCase();
+    const country = clean(row['Country']).toLowerCase();
+    const level = clean(row['Level']).toLowerCase();
+    const speaker = clean(row['Speaker']).toLowerCase();
+    const task = clean(row['Task']).toLowerCase();
 
     if (byCountry && country !== byCountry) return false;
     if (byLevel && level !== byLevel) return false;
@@ -69,9 +73,10 @@ function renderList(container, rows) {
     const meta = node.querySelector('.meta');
     const link = node.querySelector('.link');
 
-    title.textContent = `${r['Task']} (${r['Level']})`;
-    meta.textContent = `Speaker: ${r['Speaker']} · Country: ${r['Country']}${r['Region'] ? ' · Region: ' + r['Region'] : ''}`;
-    link.href = r['Link'];
+    title.textContent = `${clean(r['Task'])} (${clean(r['Level'])})`;
+    const regionText = clean(r['Region']) ? ' · Region: ' + clean(r['Region']) : '';
+    meta.textContent = `Speaker: ${clean(r['Speaker'])} · Country: ${clean(r['Country'])}${regionText}`;
+    link.href = clean(r['Link']);
 
     container.appendChild(node);
   });
@@ -80,7 +85,6 @@ function renderList(container, rows) {
 (async function init() {
   const data = await loadData();
 
-  // Elements
   const search = document.getElementById('search');
   const country = document.getElementById('country');
   const level = document.getElementById('level');
@@ -90,12 +94,10 @@ function renderList(container, rows) {
   const results = document.getElementById('results');
   const count = document.getElementById('count');
 
-  // Populate selects
   renderOptions(country, uniqueSorted(data, 'Country'));
   renderOptions(level, uniqueSorted(data, 'Level'));
   renderOptions(speaker, uniqueSorted(data, 'Speaker'));
 
-  // Initial from URL
   const initial = setFromParams();
   search.value = initial.query;
   country.value = initial.country;
@@ -143,6 +145,5 @@ function renderList(container, rows) {
     }
   });
 
-  // First render
   refresh();
 })();
