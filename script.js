@@ -31,6 +31,30 @@ const labels = {
   }
 };
 
+// Accept multiple possible header names for each field
+const COL_ALIASES = {
+  ID: ["ID","Id","id"],
+  Title: ["Title","Título","Titulo"],
+  URL: ["URL","Link","Enlace"],
+  Country: ["Country","País","Pais"],
+  Region: ["Region","Región","Region/State","Provincia"],
+  Speaker: ["Speaker","Presentador","Ponente","Instructor"],
+  Level: ["Level","Nivel"],
+  Topic: ["Topic","Tema","Category","Categoría","Categoria"],
+  Language: ["Language","Idioma"],
+  Description: ["Description","Descripción","Descripcion","Notes"],
+  Thumbnail: ["Thumbnail","Image","Imagen","Thumb","Poster"]
+};
+
+function pick(obj, keys){
+  for(const k of keys){
+    if(Object.prototype.hasOwnProperty.call(obj, k) && String(obj[k]).trim()!==""){
+      return String(obj[k]).trim();
+    }
+  }
+  return "";
+}
+
 const state = {
   lang: "es",
   data: [],
@@ -73,10 +97,10 @@ function setTexts(){
   els.footerNote.textContent = t("footer");
 }
 
-function uniqueValues(arr, key){
+function uniqueValues(arr, acc){
   const s = new Set();
   arr.forEach(r => {
-    const v = (r[key] ?? "").trim();
+    const v = acc(r).trim();
     if(v) s.add(v);
   });
   return Array.from(s).sort((a,b)=>a.localeCompare(b));
@@ -90,6 +114,8 @@ function fillMultiSelect(selectEl, values){
     opt.textContent = v;
     selectEl.appendChild(opt);
   });
+  // ensure nothing is selected initially
+  selectEl.selectedIndex = -1;
 }
 
 function getSelected(selectEl){
@@ -100,14 +126,18 @@ function applyFilters(){
   const f = state.filters;
   const q = f.q.toLowerCase();
   const out = state.data.filter(row => {
-    function inSel(val, arr){ return arr.length===0 || arr.includes((val||"").trim()); }
-    const text = [row.Title,row.Description,row.Speaker,row.Country,row.Region,row.Topic]
-      .join(" ").toLowerCase();
-    return inSel(row.Country, f.country) &&
-           inSel(row.Region, f.region) &&
-           inSel(row.Speaker, f.speaker) &&
-           inSel(row.Level, f.level) &&
-           inSel(row.Topic, f.topic) &&
+    function inSel(val, arr){ return arr.length===0 || arr.includes(val); }
+    const Country = row.Country;
+    const Region = row.Region;
+    const Speaker = row.Speaker;
+    const Level   = row.Level;
+    const Topic   = row.Topic;
+    const text = [row.Title,row.Description,Speaker,Country,Region,Topic].join(" ").toLowerCase();
+    return inSel(Country, f.country) &&
+           inSel(Region, f.region) &&
+           inSel(Speaker, f.speaker) &&
+           inSel(Level, f.level) &&
+           inSel(Topic, f.topic) &&
            (q==="" || text.includes(q));
   });
   render(out);
@@ -124,7 +154,6 @@ function render(rows){
   }
   rows.forEach(r=>{
     const node = els.cardTpl.content.cloneNode(true);
-    const art = node.querySelector(".card");
     const thumb = node.querySelector(".thumb");
     const title = node.querySelector(".title");
     const meta = node.querySelector(".meta");
@@ -150,53 +179,51 @@ function render(rows){
 
 function clearFilters(){
   state.filters = { country: [], region: [], speaker: [], level: [], topic: [], q: "" };
-  els.country.selectedIndex = -1;
-  els.region.selectedIndex = -1;
-  els.speaker.selectedIndex = -1;
-  els.level.selectedIndex = -1;
-  els.topic.selectedIndex = -1;
+  for(const el of [els.country,els.region,els.speaker,els.level,els.topic]){
+    el.selectedIndex = -1;
+  }
   els.search.value = "";
   applyFilters();
 }
 
 async function loadData(){
   const res = await fetch("data.csv");
-  const text = await res.text();
-  const [header, ...lines] = text.trim().split(/\r?\n/);
-  const cols = header.split(",");
-  const data = lines.map(line=>{
-    // Simple CSV split, handles commas inside quotes
-    const cells = [];
-    let cur = "", inQ = false;
-    for(let i=0;i<line.length;i++){
-      const ch = line[i];
-      if(ch === '"'){
-        inQ = !inQ;
-      }else if(ch === "," && !inQ){
-        cells.push(cur); cur = "";
-      }else{
-        cur += ch;
-      }
-    }
-    cells.push(cur);
-    const obj = {};
-    cols.forEach((c,idx)=>{
-      obj[c.trim()] = (cells[idx]||"").replace(/^"|"$/g,"");
-    });
-    return obj;
-  });
-  state.data = data;
-  const countries = uniqueValues(data, "Country");
-  const regions = uniqueValues(data, "Region");
-  const speakers = uniqueValues(data, "Speaker");
-  const levels = uniqueValues(data, "Level");
-  const topics = uniqueValues(data, "Topic");
+  const csvText = await res.text();
 
-  fillMultiSelect(els.country, countries);
-  fillMultiSelect(els.region, regions);
-  fillMultiSelect(els.speaker, speakers);
-  fillMultiSelect(els.level, levels);
-  fillMultiSelect(els.topic, topics);
+  const parsed = Papa.parse(csvText, {
+    header: true,
+    skipEmptyLines: "greedy",
+    transformHeader: h => String(h).replace(/^\ufeff/,'').trim() // remove BOM & spaces
+  });
+
+  const rows = parsed.data.map(row => {
+    // normalize columns using aliases
+    const normalized = {
+      ID: pick(row, COL_ALIASES.ID),
+      Title: pick(row, COL_ALIASES.Title),
+      URL: pick(row, COL_ALIASES.URL),
+      Country: pick(row, COL_ALIASES.Country),
+      Region: pick(row, COL_ALIASES.Region),
+      Speaker: pick(row, COL_ALIASES.Speaker),
+      Level: pick(row, COL_ALIASES.Level),
+      Topic: pick(row, COL_ALIASES.Topic),
+      Language: pick(row, COL_ALIASES.Language),
+      Description: pick(row, COL_ALIASES.Description),
+      Thumbnail: pick(row, COL_ALIASES.Thumbnail)
+    };
+    // collapse spaces
+    for(const k in normalized){ normalized[k] = (normalized[k]||"").replace(/\s+/g," ").trim(); }
+    return normalized;
+  }).filter(r => r.Title || r.URL); // keep only meaningful rows
+
+  state.data = rows;
+
+  // Populate filter menus from full dataset
+  fillMultiSelect(els.country, uniqueValues(rows, r=>r.Country||""));
+  fillMultiSelect(els.region,  uniqueValues(rows, r=>r.Region||""));
+  fillMultiSelect(els.speaker, uniqueValues(rows, r=>r.Speaker||""));
+  fillMultiSelect(els.level,   uniqueValues(rows, r=>r.Level||""));
+  fillMultiSelect(els.topic,   uniqueValues(rows, r=>r.Topic||""));
 
   applyFilters();
 }
@@ -212,7 +239,7 @@ function bindEvents(){
   els.speaker.addEventListener("change", ()=>{ state.filters.speaker = getSelected(els.speaker); applyFilters(); });
   els.level.addEventListener("change", ()=>{ state.filters.level = getSelected(els.level); applyFilters(); });
   els.topic.addEventListener("change", ()=>{ state.filters.topic = getSelected(els.topic); applyFilters(); });
-  els.search.addEventListener("input", ()=>{ state.filters.q = els.search.value.trim(); applyFilters(); });
+  els.search.addEventListener("input", ()=>{ state.filters.q = els.search.value.trim().toLowerCase(); applyFilters(); });
   els.clear.addEventListener("click", clearFilters);
 }
 
